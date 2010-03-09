@@ -23,13 +23,55 @@ module MachinistSpecs
     attr_accessor :name
   end
 
+  class Thing1
+    attr_accessor :value_initialized_with_arg_to_new
+
+    def initialize(arg)
+      @value_initialized_with_arg_to_new = arg
+    end
+  end
+  
+  class Thing2
+    attr_accessor :value_initialized_with_first_arg_to_new
+    attr_accessor :value_initialized_with_second_arg_to_new
+
+    def initialize(arg1, arg2)
+      @value_initialized_with_first_arg_to_new = arg1
+      @value_initialized_with_second_arg_to_new = arg2
+    end
+  end
+
   describe Machinist do
     before(:each) do
       [Person, Post, Grandpa, Dad, Son].each(&:clear_blueprints!)
     end
 
+    context "constructing objects taking arguments to new" do
+      before do
+        Thing1.blueprint do
+        end
+
+        Thing2.blueprint do
+        end
+      end
+
+      it "should pass :new key with one argument to the constructed object's initialize" do
+        Thing1.make(:new => "arg to new").value_initialized_with_arg_to_new.should == "arg to new"
+      end
+
+      it "should pass :new key with multiple items to the constructed object's initialize" do
+        thing = Thing2.make(:new => ["first arg to new", "second arg to new"])
+        thing.value_initialized_with_first_arg_to_new.should == "first arg to new"
+        thing.value_initialized_with_second_arg_to_new.should == "second arg to new"
+      end
+
+      it "should accept a string e.g. 'new' key" do
+        Thing1.make('new' => "arg to new").value_initialized_with_arg_to_new.should == "arg to new"
+      end
+    end
+
     it "should raise for make on a class with no blueprint" do
-      lambda { Person.make }.should raise_error(RuntimeError, "No blueprint for class MachinistSpecs::Person")
+      lambda { Person.make }.should raise_error(RuntimeError)
     end
   
     it "should set an attribute on the constructed object from a constant in the blueprint" do
@@ -60,14 +102,21 @@ module MachinistSpecs
       Post.make.published.should be_false
     end
   
+    it "should override an attribute from the blueprint with a passed-in attribute" do
+      Person.blueprint do
+        name "Fred"
+      end
+      Person.make(:name => "Bill").name.should == "Bill"
+    end
+  
     it "should allow overridden attribute names to be strings" do
       Person.blueprint do
-        name { "Fred" }
+        name "Fred"
       end
       Person.make("name" => "Bill").name.should == "Bill"
     end
   
-    it "should override an attribute from the blueprint with a passed-in attribute" do
+    it "should not call a block in the blueprint if that attribute is passed in" do
       block_called = false
       Person.blueprint do
         name { block_called = true; "Fred" }
@@ -95,8 +144,8 @@ module MachinistSpecs
   
     it "should allow reading of a previously assigned attribute from within the blueprint" do
       Post.blueprint do
-        title { "Test" }
-        body  { title }
+        title "Test"
+        body { title }
       end
       Post.make.body.should == "Test"
     end
@@ -113,7 +162,7 @@ module MachinistSpecs
         end
         @person = Person.make(:admin)
       end
-      
+    
       it "should override an attribute from the parent blueprint in the child blueprint" do
         @person.admin.should == true
       end
@@ -125,51 +174,30 @@ module MachinistSpecs
       it "should set an attribute defined in the parent blueprint" do
         @person.name.should == "Fred"
       end
-
+      
       it "should return the correct list of named blueprints" do
         Person.blueprint(:foo) { }
         Person.blueprint(:bar) { }
         Person.named_blueprints.to_set.should == [:admin, :foo, :bar].to_set
       end
-
-      it "should raise exception for make if named blueprint is not defined" do
-        lambda { Person.make(:bogus) }.should raise_error(
-          RuntimeError, "No blueprint named 'bogus' defined for class MachinistSpecs::Person"
-        )
-      end
-      
-      it "should raise a sensible error when calling a named blueprint with no master" do
-        Post.blueprint(:foo) { }
-        lambda { Post.make(:foo) }.should raise_error(
-          RuntimeError, "Can't construct an object from a named blueprint without a default blueprint for class MachinistSpecs::Post"
-        )
-      end
     end
 
     describe "blueprint inheritance" do
       it "should inherit blueprinted attributes from the parent class" do
-        Dad.blueprint do
-          name { "Fred" }
-        end
+        Dad.blueprint { name "Fred" }
         Son.blueprint { }
         Son.make.name.should == "Fred"
       end
 
       it "should override blueprinted attributes in the child class" do
-        Dad.blueprint do
-          name { "Fred" }
-        end
-        Son.blueprint do
-          name { "George" }
-        end
+        Dad.blueprint { name "Fred" }
+        Son.blueprint { name "George" }
         Dad.make.name.should == "Fred"
         Son.make.name.should == "George"
       end
 
       it "should inherit from blueprinted attributes in ancestor class" do
-        Grandpa.blueprint do
-          name { "Fred" }
-        end
+        Grandpa.blueprint { name "Fred" }
         Son.blueprint { }
         Grandpa.make.name.should == "Fred"
         lambda { Dad.make }.should raise_error(RuntimeError)
@@ -177,12 +205,8 @@ module MachinistSpecs
       end
 
       it "should follow inheritance for named blueprints correctly" do
-        Dad.blueprint do
-          name { "John" }
-        end
-        Dad.blueprint(:special) do
-          name { "Paul" }
-        end
+        Dad.blueprint           { name "John" }
+        Dad.blueprint(:special) { name "Paul" }
         Son.blueprint           { }
         Son.blueprint(:special) { }
         Son.make(:special).name.should == "John"
