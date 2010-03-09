@@ -270,6 +270,10 @@ Machinist also works with plain old Ruby objects. Let's say you have a class lik
     class Post
       attr_accessor :title
       attr_accessor :body
+
+      def initialize(arg1, arg2)
+        ...
+      end
     end
     
 You can then do the following in your `blueprints.rb`:
@@ -280,6 +284,10 @@ You can then do the following in your `blueprints.rb`:
       title "A title!"
       body  "A body!"
     end
+
+And to use it:
+
+    Post.make(:new => ["value for new(arg1)", "value for new(arg2)"])
 
 Community
 =========
